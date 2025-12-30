@@ -72,13 +72,6 @@ function minutesToHourLabel(totalMinutes: number) {
   return `${h} h ${m}`;
 }
 
-function durationLabel(startISO: string, endISO: string) {
-  const s = new Date(startISO);
-  const e = new Date(endISO);
-  const mins = Math.max(0, Math.round((e.getTime() - s.getTime()) / 60000));
-  return minutesToHourLabel(mins);
-}
-
 export default function PlanPage() {
   // Grid settings
   const DAY_START_HOUR = 7;
@@ -86,7 +79,8 @@ export default function PlanPage() {
   const SLOT_MINUTES = 30;
 
   const MOBILE_BREAKPOINT = 520;
-  const MOBILE_DAY_W = 150;
+  // Breite pro Tag auf Mobile: macht die Slots lesbar, Woche per Scroll erreichbar
+  const MOBILE_DAY_W = 140;
 
   // Booking window: today -> today + 2 months (rolling)
   const bookingMin = useMemo(() => startOfDay(new Date()), []);
@@ -247,9 +241,9 @@ export default function PlanPage() {
     const rect = grid.getBoundingClientRect();
     const y = clientY - rect.top;
 
-    const headerH = 44; // must match headerH below
-    const usableH = rect.height - headerH;
-    const y2 = y - headerH;
+    const headerHLocal = 44; // must match headerH below
+    const usableH = rect.height - headerHLocal;
+    const y2 = y - headerHLocal;
     if (y2 < 0) return;
 
     const totalMinutes = (DAY_END_HOUR - DAY_START_HOUR) * 60;
@@ -529,14 +523,28 @@ export default function PlanPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="E-Mail"
-                style={{ padding: "9px 10px", borderRadius: 10, border: "1px solid #e5e7eb", minWidth: 220 }}
+                style={{
+                  padding: "9px 10px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  minWidth: 220,
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
               />
               <input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Passwort"
                 type="password"
-                style={{ padding: "9px 10px", borderRadius: 10, border: "1px solid #e5e7eb", minWidth: 220 }}
+                style={{
+                  padding: "9px 10px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  minWidth: 220,
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
               />
               <button
                 onClick={login}
@@ -603,14 +611,28 @@ export default function PlanPage() {
             </div>
           </div>
 
-          <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {/* ✅ FIX: Mobile 1 Spalte, Desktop 2 Spalten */}
+          <div
+            style={{
+              marginTop: 10,
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: 12,
+            }}
+          >
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <label style={{ fontSize: 12, opacity: 0.75 }}>Start</label>
               <input
                 type="datetime-local"
                 value={startValue}
                 onChange={(e) => setStartValue(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb" }}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: "1px solid #e5e7eb",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
               />
             </div>
 
@@ -620,7 +642,13 @@ export default function PlanPage() {
                 type="datetime-local"
                 value={endValue}
                 onChange={(e) => setEndValue(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb" }}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: "1px solid #e5e7eb",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
               />
             </div>
           </div>
@@ -698,7 +726,7 @@ export default function PlanPage() {
       {/* Plan */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 14px 18px" }}>
         <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, background: "#fff" }}>
-          {/* Horizontal scroll container */}
+          {/* ✅ Horizontal scroll container */}
           <div
             style={{
               overflowX: "auto",
@@ -726,7 +754,7 @@ export default function PlanPage() {
                 <div
                   style={{
                     paddingLeft: 10,
-                    fontSize: 12,
+                    fontSize: isMobile ? 11 : 12,
                     opacity: 0.7,
                     position: "sticky",
                     left: 0,
@@ -741,7 +769,19 @@ export default function PlanPage() {
                 {weekDays.map((d, i) => {
                   const isToday = sameDay(d, new Date());
                   return (
-                    <div key={i} style={{ padding: "0 10px", fontWeight: 800, fontSize: 13 }}>
+                    <div
+                      key={i}
+                      style={{
+                        padding: isMobile ? "0 6px" : "0 10px",
+                        fontWeight: 800,
+                        fontSize: isMobile ? 12 : 13,
+                        lineHeight: 1.1,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                      title={formatDayHeader(d)}
+                    >
                       {formatDayHeader(d)} {isToday ? "•" : ""}
                     </div>
                   );
@@ -779,7 +819,7 @@ export default function PlanPage() {
                         paddingLeft: 10,
                         display: "flex",
                         alignItems: "center",
-                        fontSize: 12,
+                        fontSize: isMobile ? 11 : 12,
                         opacity: 0.75,
                       }}
                     >
@@ -855,7 +895,7 @@ export default function PlanPage() {
                               background: slotColor(s.user_id),
                               color: "#fff",
                               borderRadius: 12,
-                              padding: "8px 10px",
+                              padding: isMobile ? "6px 8px" : "8px 10px",
                               boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
                               cursor: mine ? "pointer" : "default",
                               userSelect: "none",
@@ -863,25 +903,38 @@ export default function PlanPage() {
                             }}
                             title={mine ? "Klicken zum Bearbeiten" : ""}
                           >
-                            {/* Full name + time + duration + belegt */}
+                            {/* ✅ Name */}
                             <div
                               style={{
                                 fontWeight: 900,
-                                fontSize: 13,
-                                lineHeight: 1.15,
-                                whiteSpace: "normal",
-                                wordBreak: "break-word",
+                                fontSize: isMobile ? 12 : 13,
+                                lineHeight: 1.1,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
                               }}
+                              title={slotLabel(s.user_id)}
                             >
                               {slotLabel(s.user_id)}
                             </div>
 
-                            <div style={{ fontSize: 12, opacity: 0.98, marginTop: 4 }}>
+                            {/* ✅ Zeiten */}
+                            <div
+                              style={{
+                                fontSize: isMobile ? 11 : 12,
+                                opacity: 0.98,
+                                marginTop: 4,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
                               {pad2(sStart.getHours())}:{pad2(sStart.getMinutes())} – {pad2(sEnd.getHours())}:{pad2(sEnd.getMinutes())}
                             </div>
 
-                            <div style={{ fontSize: 12, opacity: 0.98, marginTop: 2, fontWeight: 800 }}>
-                              Dauer: {durationLabel(s.starts_at, s.ends_at)} • belegt
+                            {/* ✅ belegt (ohne Dauer) */}
+                            <div style={{ fontSize: isMobile ? 11 : 12, opacity: 0.92, marginTop: 2, fontWeight: 800 }}>
+                              belegt
                             </div>
 
                             {mine && (
