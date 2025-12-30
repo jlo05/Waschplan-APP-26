@@ -1,214 +1,221 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
-type Profile = {
+type ProfileRow = {
   id: string;
   name: string | null;
   color: string | null;
 };
 
-function isValidCssColor(s: string | null | undefined) {
-  return !!s && typeof s === "string" && s.trim().length > 0;
-}
-
 export default function AdminPage() {
-  const [mounted, setMounted] = useState(false);
-
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileRow>>({});
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  const adminEmail = useMemo(() => (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase(), []);
+  const [err, setErr] = useState<string>("");
 
+  // Session laden
   useEffect(() => {
-    setMounted(true);
-    init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user ?? null;
+      setUserId(u?.id ?? null);
+      setUserEmail(u?.email ?? null);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      const u = session?.user ?? null;
+      setUserId(u?.id ?? null);
+      setUserEmail(u?.email ?? null);
+    });
+
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function init() {
-    setMsg(null);
+  // Display name aus profiles (falls vorhanden)
+  const displayName = useMemo(() => {
+    if (!userId) return null;
+    const n = profilesMap[userId]?.name?.trim();
+    return n && n.length > 0 ? n : userEmail;
+  }, [profilesMap, userId, userEmail]);
 
-    const { data } = await supabase.auth.getSession();
-    const email = data.session?.user?.email ?? null;
+  async function checkAdminAndLoad() {
+    setErr("");
+
+    const { data: sess } = await supabase.auth.getSession();
+    const email = sess.session?.user?.email ?? null;
+    const uid = sess.session?.user?.id ?? null;
 
     setUserEmail(email);
-    setIsAdmin(!!email && email.toLowerCase() === adminEmail);
+    setUserId(uid);
 
-    if (!!email && email.toLowerCase() === adminEmail) {
-      await loadProfiles();
-    }
-  }
-
-  async function loadProfiles() {
-    setMsg(null);
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id,name,color")
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      setMsg("Fehler beim Laden: " + error.message);
+    if (!email) {
+      setIsAdmin(false);
       return;
     }
 
-    setProfiles((data ?? []) as Profile[]);
-  }
+    // Admin check
+    const { data: adminRow, error: adminErr } = await supabase
+      .from("admin_emails")
+      .select("email")
+      .eq("email", email)
+      .maybeSingle();
 
-  function updateLocal(id: string, patch: Partial<Profile>) {
-    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  }
-
-  async function saveProfile(p: Profile) {
-    setMsg(null);
-
-    const color = isValidCssColor(p.color) ? p.color : "#e6f0ff";
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ name: p.name ?? null, color })
-      .eq("id", p.id);
-
-    if (error) {
-      setMsg("Fehler beim Speichern: " + error.message);
+    if (adminErr) {
+      setErr(`Fehler Admin-Check: ${adminErr.message}`);
+      setIsAdmin(false);
       return;
     }
 
-    setMsg("✅ Gespeichert.");
-    await loadProfiles();
+    const ok = !!adminRow?.email;
+    setIsAdmin(ok);
+
+    // Profiles laden (für Anzeige Name/Farbe, und Admin-Bearbeitung)
+    const { data: p, error: pErr } = await supabase.from("profiles").select("id,name,color").order("name", { ascending: true });
+
+    if (pErr) {
+      setErr(`Fehler beim Laden profiles: ${pErr.message}`);
+      return;
+    }
+
+    const list = (p ?? []) as ProfileRow[];
+    setProfiles(list);
+
+    const map: Record<string, ProfileRow> = {};
+    list.forEach((x) => (map[x.id] = x));
+    setProfilesMap(map);
   }
 
-  if (!mounted) return <div style={{ padding: 40 }}>Lade…</div>;
+  useEffect(() => {
+    checkAdminAndLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail]);
 
-  if (!userEmail) {
-    return (
-      <main style={{ maxWidth: 900, margin: "24px auto", padding: 16, fontFamily: "system-ui" }}>
-        <h1>Admin</h1>
-        <p>Bitte zuerst einloggen (über /plan).</p>
-      </main>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <main style={{ maxWidth: 900, margin: "24px auto", padding: 16, fontFamily: "system-ui" }}>
-        <h1>Admin</h1>
-        <p>
-          Eingeloggt als <b>{userEmail}</b>
-        </p>
-        <p style={{ padding: 10, border: "1px solid #eee", borderRadius: 12 }}>
-          ⛔ Kein Zugriff. (Admin ist: <b>{adminEmail || "nicht gesetzt"}</b>)
-        </p>
-      </main>
-    );
+  async function saveProfile(id: string, name: string, color: string) {
+    setErr("");
+    const { error } = await supabase.from("profiles").update({ name, color }).eq("id", id);
+    if (error) {
+      setErr(`Fehler beim Speichern: ${error.message}`);
+      return;
+    }
+    await checkAdminAndLoad();
   }
 
   return (
-    <main style={{ maxWidth: 1100, margin: "24px auto", padding: 16, fontFamily: "system-ui" }}>
-      <h1 style={{ marginBottom: 8 }}>Admin: Namen & Farben</h1>
+    <div style={{ background: "#fff", color: "#111", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+        <h1 style={{ margin: 0 }}>Admin: Namen & Farben</h1>
 
-      <div style={{ marginBottom: 14, opacity: 0.8 }}>
-        Eingeloggt als <b>{userEmail}</b>
-      </div>
+        <div style={{ marginTop: 10, padding: 12, border: "1px solid #e5e7eb", borderRadius: 14 }}>
+          <div style={{ opacity: 0.8 }}>
+            Eingeloggt als <b>{displayName ?? userEmail ?? "nicht eingeloggt"}</b>
+          </div>
+          {!isAdmin && (
+            <div style={{ marginTop: 8, color: "#b91c1c", fontWeight: 900 }}>
+              Kein Zugriff – Nicht Admin: {userEmail ?? "?"}
+            </div>
+          )}
+          <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={checkAdminAndLoad}
+              style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid #e5e7eb", background: "#fff" }}
+            >
+              Neu laden
+            </button>
+            <a
+              href="/plan"
+              style={{
+                padding: "10px 14px",
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                textDecoration: "none",
+                color: "#111",
+              }}
+            >
+              ← zurück zu /plan
+            </a>
+          </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <button
-          onClick={loadProfiles}
-          style={{ padding: "8px 10px", border: "1px solid #ccc", borderRadius: 10 }}
-        >
-          Neu laden
-        </button>
-        <a
-          href="/plan"
-          style={{
-            padding: "8px 10px",
-            border: "1px solid #ccc",
-            borderRadius: 10,
-            textDecoration: "none",
-            color: "inherit",
-          }}
-        >
-          ← zurück zu /plan
-        </a>
-      </div>
-
-      {msg && <p style={{ marginBottom: 14 }}>{msg}</p>}
-
-      <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 2fr 1fr 1fr",
-            gap: 0,
-            background: "#fafafa",
-            borderBottom: "1px solid #eee",
-          }}
-        >
-          <div style={{ padding: 10, fontWeight: 700 }}>ID</div>
-          <div style={{ padding: 10, fontWeight: 700 }}>Name</div>
-          <div style={{ padding: 10, fontWeight: 700 }}>Farbe</div>
-          <div style={{ padding: 10, fontWeight: 700 }}>Aktion</div>
+          {err && <div style={{ marginTop: 10, color: "#b91c1c" }}>{err}</div>}
         </div>
 
-        {profiles.map((p) => (
-          <div
-            key={p.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 2fr 1fr 1fr",
-              borderBottom: "1px solid #f0f0f0",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ padding: 10, fontSize: 12, opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis" }}>
-              {p.id}
+        {/* Admin Tabelle nur wenn Admin */}
+        {isAdmin && (
+          <div style={{ marginTop: 14, border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 0.8fr 0.8fr", background: "#f3f4f6", padding: 12, fontWeight: 900 }}>
+              <div>ID</div>
+              <div>Name</div>
+              <div>Farbe</div>
+              <div>Aktion</div>
             </div>
 
-            <div style={{ padding: 10 }}>
-              <input
-                value={p.name ?? ""}
-                onChange={(e) => updateLocal(p.id, { name: e.target.value })}
-                placeholder="z.B. Partei A"
-                style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 10 }}
-              />
-            </div>
-
-            <div style={{ padding: 10, display: "flex", gap: 10, alignItems: "center" }}>
-              <input
-                type="color"
-                value={isValidCssColor(p.color) ? (p.color as string) : "#e6f0ff"}
-                onChange={(e) => updateLocal(p.id, { color: e.target.value })}
-                style={{ width: 44, height: 36, border: "none", background: "transparent" }}
-                title="Farbe wählen"
-              />
-              <input
-                value={p.color ?? ""}
-                onChange={(e) => updateLocal(p.id, { color: e.target.value })}
-                placeholder="#A0C4FF"
-                style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 10 }}
-              />
-            </div>
-
-            <div style={{ padding: 10 }}>
-              <button
-                onClick={() => saveProfile(p)}
-                style={{ padding: "10px 14px", border: "1px solid #ccc", borderRadius: 10, width: "100%" }}
-              >
-                Speichern
-              </button>
-            </div>
+            {profiles.map((p) => (
+              <AdminRow key={p.id} p={p} onSave={saveProfile} />
+            ))}
           </div>
-        ))}
+        )}
+
+        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
+          Tipp: Nur Admin darf Namen/Farben ändern. User selbst kann seinen Namen nicht ändern (nur Admin).
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminRow({ p, onSave }: { p: ProfileRow; onSave: (id: string, name: string, color: string) => Promise<void> }) {
+  const [name, setName] = useState(p.name ?? "");
+  const [color, setColor] = useState(p.color ?? "#3B82F6");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(p.name ?? "");
+    setColor(p.color ?? "#3B82F6");
+  }, [p.id, p.name, p.color]);
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 0.8fr 0.8fr", padding: 12, borderTop: "1px solid #e5e7eb", alignItems: "center", gap: 10 }}>
+      <div style={{ fontSize: 12, opacity: 0.8, wordBreak: "break-all" }}>{p.id}</div>
+
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb" }}
+      />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 18, height: 18, borderRadius: 6, background: color, border: "1px solid #e5e7eb" }} />
+        <input
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb", width: "100%" }}
+        />
       </div>
 
-      <p style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
-        Tipp: Name ist optional. Farbe ist pro User fix und wird im Waschplan für die Slot-Blöcke verwendet.
-      </p>
-    </main>
+      <button
+        onClick={async () => {
+          setSaving(true);
+          await onSave(p.id, name, color);
+          setSaving(false);
+        }}
+        style={{
+          padding: "10px 14px",
+          borderRadius: 12,
+          border: "1px solid #e5e7eb",
+          background: "#111",
+          color: "#fff",
+          fontWeight: 900,
+          opacity: saving ? 0.7 : 1,
+        }}
+        disabled={saving}
+      >
+        {saving ? "..." : "Speichern"}
+      </button>
+    </div>
   );
 }
