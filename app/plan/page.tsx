@@ -72,11 +72,21 @@ function minutesToHourLabel(totalMinutes: number) {
   return `${h} h ${m}`;
 }
 
+function durationLabel(startISO: string, endISO: string) {
+  const s = new Date(startISO);
+  const e = new Date(endISO);
+  const mins = Math.max(0, Math.round((e.getTime() - s.getTime()) / 60000));
+  return minutesToHourLabel(mins);
+}
+
 export default function PlanPage() {
   // Grid settings
   const DAY_START_HOUR = 7;
   const DAY_END_HOUR = 22;
   const SLOT_MINUTES = 30;
+
+  const MOBILE_BREAKPOINT = 520;
+  const MOBILE_DAY_W = 150;
 
   // Booking window: today -> today + 2 months (rolling)
   const bookingMin = useMemo(() => startOfDay(new Date()), []);
@@ -98,9 +108,18 @@ export default function PlanPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [msg, setMsg] = useState<string>("");
-  const [justSaved, setJustSaved] = useState<boolean>(false); // ✅ sofort sichtbar
+  const [justSaved, setJustSaved] = useState<boolean>(false);
+
+  const [isMobile, setIsMobile] = useState(false);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const weekDays = useMemo(() => {
     const days: Date[] = [];
@@ -182,7 +201,6 @@ export default function PlanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStart]);
 
-  // Username statt E-Mail (fallback: Email)
   const userDisplayName = useMemo(() => {
     if (!userId) return null;
     const n = profiles[userId]?.name?.trim();
@@ -229,14 +247,14 @@ export default function PlanPage() {
     const rect = grid.getBoundingClientRect();
     const y = clientY - rect.top;
 
-    const headerH = 44;
+    const headerH = 44; // must match headerH below
     const usableH = rect.height - headerH;
     const y2 = y - headerH;
     if (y2 < 0) return;
 
     const totalMinutes = (DAY_END_HOUR - DAY_START_HOUR) * 60;
     const minutes = clamp(
-      Math.round((y2 / usableH) * totalMinutes / SLOT_MINUTES) * SLOT_MINUTES,
+      Math.round(((y2 / usableH) * totalMinutes) / SLOT_MINUTES) * SLOT_MINUTES,
       0,
       totalMinutes
     );
@@ -255,8 +273,8 @@ export default function PlanPage() {
     setJustSaved(false);
   }
 
-  // Dauer Buttons: 2h, 4h, 6h (hellgrün)
-  const quickDurations = useMemo(() => [120, 240, 360], []); // minutes
+  // Duration buttons: 2h, 4h, 6h (green)
+  const quickDurations = useMemo(() => [120, 240, 360], []);
   function applyDuration(minutes: number) {
     if (!startValue) return;
     const s = new Date(startValue);
@@ -330,8 +348,6 @@ export default function PlanPage() {
       }
 
       setEditingId(null);
-
-      // ✅ sofort sichtbares Feedback
       setJustSaved(true);
       setMsg("Gespeichert ✅");
       setTimeout(() => setJustSaved(false), 1800);
@@ -349,7 +365,6 @@ export default function PlanPage() {
       return;
     }
 
-    // ✅ sofort sichtbares Feedback
     setJustSaved(true);
     setMsg("Gespeichert ✅");
     setTimeout(() => setJustSaved(false), 1800);
@@ -424,7 +439,15 @@ export default function PlanPage() {
     <div style={{ background: "#fff", color: "#111", minHeight: "100vh" }}>
       {/* Header */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 14px 8px" }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <div style={{ fontSize: 22, fontWeight: 800 }}>Waschplan</div>
             <div style={{ fontSize: 13, opacity: 0.75 }}>
@@ -441,14 +464,24 @@ export default function PlanPage() {
                   return x;
                 })
               }
-              style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+              }}
             >
               ← Woche
             </button>
 
             <button
               onClick={() => setWeekStart(startOfWeekMonday(new Date()))}
-              style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+              }}
             >
               Heute
             </button>
@@ -461,7 +494,12 @@ export default function PlanPage() {
                   return x;
                 })
               }
-              style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+              }}
             >
               Woche →
             </button>
@@ -502,13 +540,27 @@ export default function PlanPage() {
               />
               <button
                 onClick={login}
-                style={{ padding: "9px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#111", color: "#fff" }}
+                style={{
+                  padding: "9px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "#111",
+                  color: "#fff",
+                }}
               >
                 Login
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
               <div>
                 Eingeloggt als <b>{userDisplayName ?? userEmail}</b>
               </div>
@@ -524,7 +576,15 @@ export default function PlanPage() {
 
         {/* Form */}
         <div style={{ marginTop: 12, padding: 12, border: "1px solid #e5e7eb", borderRadius: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <div
               style={{
                 fontWeight: 900,
@@ -565,7 +625,7 @@ export default function PlanPage() {
             </div>
           </div>
 
-          {/* Dauer Buttons: hellgrün */}
+          {/* Duration Buttons */}
           <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ fontSize: 12, opacity: 0.75 }}>Dauer:</div>
             {quickDurations.map((min) => (
@@ -576,7 +636,7 @@ export default function PlanPage() {
                   padding: "8px 12px",
                   borderRadius: 999,
                   border: "1px solid #bbf7d0",
-                  background: "#86efac", // hellgrün
+                  background: "#86efac",
                   color: "#111",
                   fontWeight: 900,
                 }}
@@ -603,7 +663,6 @@ export default function PlanPage() {
               }}
             >
               {editingId ? "Änderung speichern" : "Speichern"}
-              {/* 4) ✅ sofort sichtbar direkt am Button */}
               {justSaved && <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>}
             </button>
 
@@ -638,168 +697,222 @@ export default function PlanPage() {
 
       {/* Plan */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 14px 18px" }}>
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden", background: "#fff" }}>
-          {/* Sticky header */}
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, background: "#fff" }}>
+          {/* Horizontal scroll container */}
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: `${timeColW}px repeat(7, 1fr)`,
-              position: "sticky",
-              top: 0,
-              zIndex: 5,
-              background: "#f3f4f6",
-              borderBottom: "1px solid #e5e7eb",
-              height: headerH,
-              alignItems: "center",
+              overflowX: "auto",
+              overflowY: "hidden",
+              WebkitOverflowScrolling: "touch",
             }}
           >
-            <div style={{ paddingLeft: 10, fontSize: 12, opacity: 0.7 }}>Zeit</div>
-            {weekDays.map((d, i) => {
-              const isToday = sameDay(d, new Date());
-              return (
-                <div key={i} style={{ padding: "0 10px", fontWeight: 800, fontSize: 13 }}>
-                  {formatDayHeader(d)} {isToday ? "•" : ""}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Grid */}
-          <div
-            ref={gridRef}
-            style={{
-              position: "relative",
-              height: gridH + 1,
-              display: "grid",
-              gridTemplateColumns: `${timeColW}px repeat(7, 1fr)`,
-            }}
-          >
-            {/* Time column */}
-            <div style={{ background: "#f3f4f6", borderRight: "1px solid #e5e7eb", position: "relative" }}>
-              {timeRows.map((t, idx) => (
+            <div style={{ minWidth: isMobile ? timeColW + 7 * MOBILE_DAY_W : 0 }}>
+              {/* Sticky header */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile
+                    ? `${timeColW}px repeat(7, ${MOBILE_DAY_W}px)`
+                    : `${timeColW}px repeat(7, 1fr)`,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 5,
+                  background: "#f3f4f6",
+                  borderBottom: "1px solid #e5e7eb",
+                  height: headerH,
+                  alignItems: "center",
+                }}
+              >
                 <div
-                  key={idx}
                   style={{
-                    height: rowH,
-                    borderBottom: "1px solid #e5e7eb",
                     paddingLeft: 10,
-                    display: "flex",
-                    alignItems: "center",
                     fontSize: 12,
-                    opacity: 0.75,
+                    opacity: 0.7,
+                    position: "sticky",
+                    left: 0,
+                    zIndex: 7,
+                    background: "#f3f4f6",
+                    borderRight: "1px solid #e5e7eb",
                   }}
                 >
-                  {t.label}
+                  Zeit
                 </div>
-              ))}
-            </div>
 
-            {/* Days */}
-            {weekDays.map((_, dayIndex) => {
-              const isTodayCol = nowLineInfo?.todayIndex === dayIndex;
-              const nowTop = nowLineInfo ? (nowLineInfo.mins / SLOT_MINUTES) * rowH : 0;
+                {weekDays.map((d, i) => {
+                  const isToday = sameDay(d, new Date());
+                  return (
+                    <div key={i} style={{ padding: "0 10px", fontWeight: 800, fontSize: 13 }}>
+                      {formatDayHeader(d)} {isToday ? "•" : ""}
+                    </div>
+                  );
+                })}
+              </div>
 
-              return (
+              {/* Grid */}
+              <div
+                ref={gridRef}
+                style={{
+                  position: "relative",
+                  height: gridH + 1,
+                  display: "grid",
+                  gridTemplateColumns: isMobile
+                    ? `${timeColW}px repeat(7, ${MOBILE_DAY_W}px)`
+                    : `${timeColW}px repeat(7, 1fr)`,
+                }}
+              >
+                {/* Time column (sticky left) */}
                 <div
-                  key={dayIndex}
-                  onClick={(e) => handleClickCell(dayIndex, (e as any).clientY)}
                   style={{
-                    position: "relative",
-                    borderRight: dayIndex === 6 ? "none" : "1px solid #e5e7eb",
-                    background: "#fff",
-                    cursor: "crosshair",
+                    background: "#f3f4f6",
+                    borderRight: "1px solid #e5e7eb",
+                    position: "sticky",
+                    left: 0,
+                    zIndex: 6,
                   }}
                 >
-                  {/* Raster */}
-                  {timeRows.map((_, idx) => (
-                    <div key={idx} style={{ height: rowH, borderBottom: "1px solid #f0f1f3" }} />
-                  ))}
-
-                  {/* Now line: only today, red */}
-                  {isTodayCol && nowLineInfo && (
+                  {timeRows.map((t, idx) => (
                     <div
+                      key={idx}
                       style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: nowTop,
-                        height: 2,
-                        background: "#ef4444",
-                        zIndex: 4,
-                        pointerEvents: "none",
+                        height: rowH,
+                        borderBottom: "1px solid #e5e7eb",
+                        paddingLeft: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 12,
+                        opacity: 0.75,
                       }}
-                    />
-                  )}
+                    >
+                      {t.label}
+                    </div>
+                  ))}
+                </div>
 
-                  {/* Slots */}
-                  {slotsByDay[dayIndex]?.map((s) => {
-                    const sStart = new Date(s.starts_at);
-                    const sEnd = new Date(s.ends_at);
+                {/* Days */}
+                {weekDays.map((_, dayIndex) => {
+                  const isTodayCol = nowLineInfo?.todayIndex === dayIndex;
+                  const nowTop = nowLineInfo ? (nowLineInfo.mins / SLOT_MINUTES) * rowH : 0;
 
-                    const topMinutes = minutesSinceDayStart(sStart);
-                    const endMinutes = minutesSinceDayStart(sEnd);
+                  return (
+                    <div
+                      key={dayIndex}
+                      onClick={(e) => handleClickCell(dayIndex, (e as any).clientY)}
+                      style={{
+                        position: "relative",
+                        borderRight: dayIndex === 6 ? "none" : "1px solid #e5e7eb",
+                        background: "#fff",
+                        cursor: "crosshair",
+                      }}
+                    >
+                      {/* Raster */}
+                      {timeRows.map((_, idx) => (
+                        <div key={idx} style={{ height: rowH, borderBottom: "1px solid #f0f1f3" }} />
+                      ))}
 
-                    const h = Math.max(1, ((endMinutes - topMinutes) / SLOT_MINUTES) * rowH);
-                    const top = (topMinutes / SLOT_MINUTES) * rowH;
+                      {/* Now line: only today, red */}
+                      {isTodayCol && nowLineInfo && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            top: nowTop,
+                            height: 2,
+                            background: "#ef4444",
+                            zIndex: 4,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
 
-                    const mine = userId && s.user_id === userId;
+                      {/* Slots */}
+                      {slotsByDay[dayIndex]?.map((s) => {
+                        const sStart = new Date(s.starts_at);
+                        const sEnd = new Date(s.ends_at);
 
-                    return (
-                      <div
-                        key={s.id}
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          if (!mine) return;
-                          startEdit(s);
-                        }}
-                        style={{
-                          position: "absolute",
-                          left: 8,
-                          right: 8,
-                          top,
-                          height: h,
-                          background: slotColor(s.user_id),
-                          color: "#fff",
-                          borderRadius: 12,
-                          padding: "8px 10px",
-                          boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
-                          cursor: mine ? "pointer" : "default",
-                          userSelect: "none",
-                        }}
-                        title={mine ? "Klicken zum Bearbeiten" : ""}
-                      >
-                        <div style={{ fontWeight: 900, fontSize: 13, lineHeight: 1.2 }}>{slotLabel(s.user_id)}</div>
-                        <div style={{ fontSize: 12, opacity: 0.95, marginTop: 4 }}>
-                          {pad2(sStart.getHours())}:{pad2(sStart.getMinutes())} – {pad2(sEnd.getHours())}:{pad2(sEnd.getMinutes())}
-                        </div>
+                        const topMinutes = minutesSinceDayStart(sStart);
+                        const endMinutes = minutesSinceDayStart(sEnd);
 
-                        {mine && (
-                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                            <button
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                deleteSlot(s.id);
-                              }}
+                        const h = Math.max(1, ((endMinutes - topMinutes) / SLOT_MINUTES) * rowH);
+                        const top = (topMinutes / SLOT_MINUTES) * rowH;
+
+                        const mine = userId && s.user_id === userId;
+
+                        return (
+                          <div
+                            key={s.id}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              if (!mine) return;
+                              startEdit(s);
+                            }}
+                            style={{
+                              position: "absolute",
+                              left: 8,
+                              right: 8,
+                              top,
+                              height: h,
+                              background: slotColor(s.user_id),
+                              color: "#fff",
+                              borderRadius: 12,
+                              padding: "8px 10px",
+                              boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+                              cursor: mine ? "pointer" : "default",
+                              userSelect: "none",
+                              overflow: "hidden",
+                            }}
+                            title={mine ? "Klicken zum Bearbeiten" : ""}
+                          >
+                            {/* Full name + time + duration + belegt */}
+                            <div
                               style={{
-                                padding: "6px 10px",
-                                borderRadius: 10,
-                                border: "1px solid rgba(255,255,255,0.45)",
-                                background: "rgba(0,0,0,0.18)",
-                                color: "#fff",
-                                fontWeight: 800,
-                                fontSize: 12,
+                                fontWeight: 900,
+                                fontSize: 13,
+                                lineHeight: 1.15,
+                                whiteSpace: "normal",
+                                wordBreak: "break-word",
                               }}
                             >
-                              Löschen
-                            </button>
+                              {slotLabel(s.user_id)}
+                            </div>
+
+                            <div style={{ fontSize: 12, opacity: 0.98, marginTop: 4 }}>
+                              {pad2(sStart.getHours())}:{pad2(sStart.getMinutes())} – {pad2(sEnd.getHours())}:{pad2(sEnd.getMinutes())}
+                            </div>
+
+                            <div style={{ fontSize: 12, opacity: 0.98, marginTop: 2, fontWeight: 800 }}>
+                              Dauer: {durationLabel(s.starts_at, s.ends_at)} • belegt
+                            </div>
+
+                            {mine && (
+                              <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                                <button
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    deleteSlot(s.id);
+                                  }}
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: 10,
+                                    border: "1px solid rgba(255,255,255,0.45)",
+                                    background: "rgba(0,0,0,0.18)",
+                                    color: "#fff",
+                                    fontWeight: 800,
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  Löschen
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -822,12 +935,22 @@ export default function PlanPage() {
                     background: "#fff",
                   }}
                 >
-                  <span style={{ width: 14, height: 14, borderRadius: 4, background: slotColor(uid), display: "inline-block" }} />
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 4,
+                      background: slotColor(uid),
+                      display: "inline-block",
+                    }}
+                  />
                   <span style={{ fontWeight: 800, fontSize: 13 }}>{slotLabel(uid)}</span>
                 </div>
               ))}
           </div>
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Hinweis: Nur eigene Slots sind anklickbar (ändern/löschen).</div>
+          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
+            Hinweis: Nur eigene Slots sind anklickbar (ändern/löschen).
+          </div>
         </div>
       </div>
     </div>
