@@ -258,7 +258,8 @@ export default function PlanPage() {
     start.setMinutes(start.getMinutes() + minutes);
 
     const end = new Date(start);
-    end.setMinutes(end.getMinutes() + 60);
+    end.setMinutes(end.getMinutes() + 120); // Mindestdauer 2h
+
 
     setEditingId(null);
     setStartValue(toLocalDatetimeInputValue(start));
@@ -318,6 +319,22 @@ export default function PlanPage() {
       setMsg("Ende muss nach Start sein.");
       return;
     }
+// ✅ Regel 2: nicht über Nacht (Start & Ende müssen am gleichen Tag sein)
+if (
+  start.getFullYear() !== end.getFullYear() ||
+  start.getMonth() !== end.getMonth() ||
+  start.getDate() !== end.getDate()
+) {
+  setMsg("Du kannst nicht über Nacht waschen.");
+  return;
+}
+
+// ✅ Regel 1: Mindestdauer 2 Stunden
+const mins = Math.round((end.getTime() - start.getTime()) / 60000);
+if (mins < 120) {
+  setMsg("Mindestdauer für einen Slot beträgt 2 Stunden.");
+  return;
+}
 
     if (!withinBookingWindow(start) || !withinBookingWindow(end)) {
       setMsg(`Eintragen nur ab heute bis max. ${bookingMax.toLocaleDateString()} möglich.`);
